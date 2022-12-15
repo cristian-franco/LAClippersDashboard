@@ -1,7 +1,7 @@
 from nba_api.stats.endpoints import commonteamroster
 from nba_api.stats.endpoints import playercareerstats
 from nba_api.stats.static import teams
-
+import streamlit as st
 import pandas as pd
 
 
@@ -27,7 +27,8 @@ def season_to_date():
 
     team_season_to_date_df = pd.merge(clips_slim_df, team_season_to_date_df, how='right', on='PLAYER_ID')
     team_season_to_date_df = team_season_to_date_df.drop(['LEAGUE_ID', 'TEAM_ID'], axis=1)
-    print(team_season_to_date_df)
+
+    return team_season_to_date_df
     # Brandon Boston Jr, rookie last year
     # player_stats = playercareerstats.PlayerCareerStats(per_mode36="Totals", player_id=clips_slim_df["PLAYER_ID"][3])
     # player_stats_df = player_stats.get_data_frames()[0]
@@ -36,7 +37,8 @@ def season_to_date():
 
 
 def main():
-    season_to_date()
+    df = season_to_date()
+    st.write("### Summary Stats", df)
 
 
 if __name__ == "__main__":
