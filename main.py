@@ -34,10 +34,11 @@ def season_to_date(clips_players_df):
     team_season_to_date_df = pd.DataFrame()
     for player in range(len(clips_players_df.index)):
         player_stats = playercareerstats.PlayerCareerStats(per_mode36="Totals", player_id=clips_players_df["PLAYER_ID"]
-        [player], timeout=500)
+        [player], timeout=600)
         player_stats_df = player_stats.get_data_frames()[0]
-        player_stats_df = player_stats_df.iloc[[-1]]
-        team_season_to_date_df = pd.concat([team_season_to_date_df, player_stats_df], ignore_index=True)
+        if not player_stats_df.empty:
+            player_stats_df = player_stats_df.iloc[[-1]]
+            team_season_to_date_df = pd.concat([team_season_to_date_df, player_stats_df], ignore_index=True)
 
     team_season_to_date_df = pd.merge(clips_players_df, team_season_to_date_df, how='right', on='PLAYER_ID')
     team_season_to_date_df = team_season_to_date_df.drop(['LEAGUE_ID', 'TEAM_ID', 'WEIGHT', 'AGE', 'PLAYER_ID',
@@ -47,11 +48,19 @@ def season_to_date(clips_players_df):
     return team_season_to_date_df
 
 
-def last_three_games_team(clips_id):
-    # get single game id's for the clippers for the season?
-    # filter down to the most recent three games
+def last_games(clips_id):
     gamefinder = leaguegamefinder.LeagueGameFinder(team_id_nullable=clips_id, timeout=500)
     games = gamefinder.get_data_frames()[0]
+
+    last_games_list = [last_three_games_team(clips_id, games), last_three_games_individual(clips_id, games),
+                       last_game_team(clips_id, games), last_game_individual(clips_id, games)]
+
+    return last_games_list
+
+
+def last_three_games_team(clips_id, games):
+    # get single game id's for the clippers for the season?
+    # filter down to the most recent three games
     last_three_games_team_df = games.head(3)
 
     last_three_games_team_df = last_three_games_team_df.drop(['SEASON_ID', 'TEAM_ID', 'TEAM_ABBREVIATION', 'TEAM_NAME',
@@ -60,11 +69,9 @@ def last_three_games_team(clips_id):
     return last_three_games_team_df
 
 
-def last_three_games_individual(clips_id):
+def last_three_games_individual(clips_id, games):
     # 2 choices: 1, return stats on last three games (doesn't really make sense since we have the last game anyways
     # 2, return averages over the last three games for the players
-    gamefinder = leaguegamefinder.LeagueGameFinder(team_id_nullable=clips_id, timeout=500)
-    games = gamefinder.get_data_frames()[0]
     last_three_games_team_df = games.head(3)
     last_three_game_ids = list(last_three_games_team_df['GAME_ID'])
 
@@ -79,9 +86,7 @@ def last_three_games_individual(clips_id):
     return game_df
 
 
-def last_game_team(clips_id):
-    gamefinder = leaguegamefinder.LeagueGameFinder(team_id_nullable=clips_id)
-    games = gamefinder.get_data_frames()[0]
+def last_game_team(clips_id, games):
     last_game_team_df = games.head(1)
 
     last_game_team_df = last_game_team_df.drop(['SEASON_ID', 'TEAM_ID', 'TEAM_ABBREVIATION', 'TEAM_NAME', 'GAME_ID'],
@@ -90,9 +95,7 @@ def last_game_team(clips_id):
     return last_game_team_df
 
 
-def last_game_individual(clips_id):
-    gamefinder = leaguegamefinder.LeagueGameFinder(team_id_nullable=clips_id)
-    games = gamefinder.get_data_frames()[0]
+def last_game_individual(clips_id, games):
     last_game_team_df = games.head(1)
 
     last_game_id = last_game_team_df['GAME_ID'].iloc[0]
@@ -110,10 +113,12 @@ def refresh_data(clips_id, clips_players_df):
     dataframe_list = []
 
     season_to_date_df = season_to_date(clips_players_df)
-    last_game_team_df = last_game_team(clips_id)
-    last_game_individual_df = last_game_individual(clips_id)
-    last_three_games_team_df = last_three_games_team(clips_id)
-    last_three_games_individual_df = last_three_games_individual(clips_id)
+
+    last_games_list = last_games(clips_id)
+    last_game_team_df = last_games_list[0]
+    last_game_individual_df = last_games_list[1]
+    last_three_games_team_df = last_games_list[2]
+    last_three_games_individual_df = last_games_list[3]
 
     dataframe_list.append(season_to_date_df)
     dataframe_list.append(last_game_team_df)
@@ -146,7 +151,7 @@ def main():
     st.write("### Last 3 Games", last_three_games_overview_df)
     # can add a row / section for averages across the three games
     # Last 3 Games Individual Stats - IN PROGRESS
-    st.write("### Last 3 Games - Team", last_three_games_individual_df)
+    # st.write("### Last 3 Games - Team", last_three_games_individual_df)
 
 
     # # Season To Date Overview
