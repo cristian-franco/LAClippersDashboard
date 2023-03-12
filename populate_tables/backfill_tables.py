@@ -53,7 +53,7 @@ def main():
     clips_id = get_clips_id()
     current_season_game_ids = get_current_season_game_ids(clips_id)
     season_to_date_team_df = season_to_date_team(clips_id, current_season_game_ids)
-    season_to_date_team_df = format_for_db(season_to_date_team_df)
+    # season_to_date_team_df = format_for_db(season_to_date_team_df)
 
 
 if __name__ == '__main__':
