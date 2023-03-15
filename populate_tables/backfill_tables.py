@@ -11,14 +11,33 @@ def get_clips_id():
     return clips_id
 
 
+def gamefinder(team_id, int_timeout):
+    try:
+        games_found = leaguegamefinder.LeagueGameFinder(team_id_nullable=team_id, timeout=int_timeout)
+    except Timeout:
+        print('Timeout caught, retying...')
+        games_found = gamefinder(team_id, int_timeout)
+
+    print('Games found! Step 1 - Done')
+    return games_found
+
+
+def get_boxscores(game_id, int_timeout):
+    try:
+        game_sets = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id, timeout=int_timeout)
+    except Timeout:
+        print('Timeout caught, retrying...')
+        game_sets = get_boxscores(game_id, int_timeout)
+
+    print('Boxscores pulled!')
+    return game_sets
+
+
 def get_current_season_game_ids(clips_id):
     # default param for LeagueGameFinder is current season
-    try:
-        gamefinder = leaguegamefinder.LeagueGameFinder(team_id_nullable=clips_id, timeout=60)
-    except Timeout:
-        print('Timeout caught')
+    games_found = gamefinder(clips_id, 10)
 
-    games = gamefinder.get_data_frames()[0]
+    games = games_found.get_data_frames()[0]
     current_season_id = games['SEASON_ID'].iloc[0]
     current_season_games = games[games.SEASON_ID == current_season_id]
     current_season_games = current_season_games.loc[current_season_games['GAME_DATE'] > '2022-10-01']
@@ -29,10 +48,7 @@ def get_current_season_game_ids(clips_id):
 
 
 def get_game_player_stats(clips_id, game_id):
-    try:
-        game_sets = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id, timeout=60)
-    except Timeout:
-        print('Timeout caught')
+    game_sets = get_boxscores(game_id, 10)
 
     game_df = game_sets.get_data_frames()[0]
     game_df = game_df.loc[game_df['TEAM_ID'] == clips_id]
@@ -57,17 +73,24 @@ def season_to_date_team(clips_id, current_season_game_ids):
     return game_df
 
 
+def convert_minutes(minutes):
+    if minutes is None:
+        print('None caught')
+        return 0
+
+    string_minutes = str(minutes)
+    list_hh_mm = string_minutes.split(':')
+    int_minutes = str(int(float(list_hh_mm[0])))
+    formatted_minutes = int_minutes + ':' + list_hh_mm[1]
+
+    return formatted_minutes
+
+
 def format_for_db(season_to_date_team_df):
 
-    for row in season_to_date_team_df:
-        minutes_string = str(season_to_date_team_df.iloc[row, 'MIN'])
-        minutes_list = minutes_string.split(':')
+    season_to_date_team_df['MIN'] = season_to_date_team_df['MIN'].apply(convert_minutes)
 
-        hours = minutes_list[0] * 60
-
-        int_minutes = hours + minutes_list[1]
-
-    return int_minutes
+    return season_to_date_team_df
 
 
 def main():
