@@ -1,6 +1,7 @@
 from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv2
 from nba_api.stats.static import teams
 import pandas as pd
+import time
 from requests.exceptions import Timeout
 
 
@@ -18,6 +19,7 @@ def game_finder(team_id, int_timeout):
         games_found = leaguegamefinder.LeagueGameFinder(team_id_nullable=team_id, timeout=int_timeout)
     except Timeout:
         print('Timeout caught, retying...')
+        time.sleep(5)
         games_found = game_finder(team_id, int_timeout)
 
     return games_found
@@ -92,26 +94,50 @@ def convert_minutes(minutes):
 
 
 def format_float(pct):
-    # FG_PCT, FG3_PCT, FT_PCT
     pct = round(100 * pct, 1)
     str_pct = str(pct) + '%'
 
     return str_pct
 
 
+def transform_pcts(season_to_date_team_df):
+    season_to_date_team_df['FG_PCT'] = season_to_date_team_df['FG_PCT'].apply(format_float)
+    season_to_date_team_df['FG3_PCT'] = season_to_date_team_df['FG3_PCT'].apply(format_float)
+    season_to_date_team_df['FT_PCT'] = season_to_date_team_df['FT_PCT'].apply(format_float)
+
+    return season_to_date_team_df
+
+
+def transform_whole_numbers(season_to_date_team_df):
+    cols = ['FGM', 'FGA', 'FG3M', 'FG3A', 'FTM', 'FTA', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', 'PTS',
+            'PLUS_MINUS']
+
+    for col in cols:
+        season_to_date_team_df[col] = season_to_date_team_df[col].apply(format_floats_to_ints)
+
+    return season_to_date_team_df
+
+
 def format_floats_to_ints(flt):
+    if pd.isna(flt):
+        return 0
+
     return int(flt)
 
 
 def format_for_db(season_to_date_team_df):
     season_to_date_team_df['MIN'] = season_to_date_team_df['MIN'].apply(convert_minutes)
 
-    floats_columns = ['FG_PCT', 'FG3_PCT', 'FT_PCT']
-    season_to_date_team_df[str(floats_columns)] = season_to_date_team_df[str(floats_columns)].apply(format_float)
+    season_to_date_team_df = transform_pcts(season_to_date_team_df)
 
-    f_to_i_columns = ['FGM', 'FGA', 'FG3M', 'FG3A', 'FTM', 'FTA', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO',
-    'PF', 'PTS', 'PLUS_MINUS']
-    season_to_date_team_df[str(f_to_i_columns)] = season_to_date_team_df[str(f_to_i_columns)].apply(format_floats_to_ints)
+    # f_to_i_columns = ['FGM', 'FGA', 'FG3M', 'FG3A', 'FTM', 'FTA', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO',
+    # 'PF', 'PTS', 'PLUS_MINUS']
+    # season_to_date_team_df['FGM', 'FGA', 'FG3M', 'FG3A', 'FTM', 'FTA', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO',
+    #                        'PF', 'PTS', 'PLUS_MINUS'] = season_to_date_team_df['FGM', 'FGA', 'FG3M', 'FG3A', 'FTM',
+    #                         'FTA', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', 'PTS', 'PLUS_MINUS'].\
+    #     apply(format_floats_to_ints)
+
+    season_to_date_team_df = transform_whole_numbers(season_to_date_team_df)
 
     return season_to_date_team_df
 
@@ -121,7 +147,7 @@ def main():
     current_season_game_ids = get_current_season_game_ids(clips_id)
 
     season_to_date_team_df = get_season_to_date_box_scores(clips_id, current_season_game_ids)
-    
+
     season_to_date_team_df = format_for_db(season_to_date_team_df)
 
     return
