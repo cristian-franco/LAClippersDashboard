@@ -2,7 +2,12 @@ from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv2
 from nba_api.stats.static import teams
 import pandas as pd
 import time
+from sqlalchemy import create_engine
+from urllib.parse import quote_plus
 from requests.exceptions import Timeout
+import config
+import pymysql
+pymysql.install_as_MySQLdb()
 
 
 # EXTRACT
@@ -94,6 +99,9 @@ def convert_minutes(minutes):
 
 
 def format_float(pct):
+    if pd.isna(pct):
+        return pct
+
     pct = round(100 * pct, 1)
     str_pct = str(pct) + '%'
 
@@ -108,47 +116,62 @@ def transform_pcts(season_to_date_team_df):
     return season_to_date_team_df
 
 
-def transform_whole_numbers(season_to_date_team_df):
-    cols = ['FGM', 'FGA', 'FG3M', 'FG3A', 'FTM', 'FTA', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', 'PTS',
-            'PLUS_MINUS']
-
-    for col in cols:
-        season_to_date_team_df[col] = season_to_date_team_df[col].apply(format_floats_to_ints)
+def format_columns(season_to_date_team_df):
+    season_to_date_team_df = season_to_date_team_df.drop('PLAYER_NAME', axis=1)
+    ptsCol = season_to_date_team_df.pop('PTS')
+    season_to_date_team_df.insert(5, 'Pts', ptsCol)
+    season_to_date_team_df.rename(columns={'GAME_ID': 'GameID', 'TEAM_ID': 'TeamID', 'PLAYER_ID': 'PlayerID',
+                                           'START_POSITION': 'StartPosition', 'MIN': 'Min', 'FG_PCT': 'FGPct',
+                                           'FG3_PCT': 'FG3Pct', 'FT_PCT': 'FTPct', 'OREB': 'OReb', 'DREB': 'DReb',
+                                           'REB': 'Reb', 'AST': 'Ast', 'STL': 'Stl', 'BLK': 'Blk', 'TO': 'TOV',
+                                           'PTS': 'Pts', 'PLUS_MINUS': 'PlusMinus'}, inplace=True)
 
     return season_to_date_team_df
-
-
-def format_floats_to_ints(flt):
-    if pd.isna(flt):
-        return 0
-
-    return int(flt)
 
 
 def format_for_db(season_to_date_team_df):
     season_to_date_team_df['MIN'] = season_to_date_team_df['MIN'].apply(convert_minutes)
 
     season_to_date_team_df = transform_pcts(season_to_date_team_df)
-
-    # f_to_i_columns = ['FGM', 'FGA', 'FG3M', 'FG3A', 'FTM', 'FTA', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO',
-    # 'PF', 'PTS', 'PLUS_MINUS']
-    # season_to_date_team_df['FGM', 'FGA', 'FG3M', 'FG3A', 'FTM', 'FTA', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO',
-    #                        'PF', 'PTS', 'PLUS_MINUS'] = season_to_date_team_df['FGM', 'FGA', 'FG3M', 'FG3A', 'FTM',
-    #                         'FTA', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TO', 'PF', 'PTS', 'PLUS_MINUS'].\
-    #     apply(format_floats_to_ints)
-
-    season_to_date_team_df = transform_whole_numbers(season_to_date_team_df)
+    season_to_date_team_df = season_to_date_team_df.reset_index(drop=True)
+    season_to_date_team_df = format_columns(season_to_date_team_df)
 
     return season_to_date_team_df
 
 
+def upload_to_db(db_choice, df):
+    if db_choice == 'local':
+        engine = create_engine(f"mysql://{config.mysql_local.user}:%s@{config.mysql_local.host}/{config.mysql_local.db}"
+                               % quote_plus(config.mysql_local.passwd))
+        con = engine.connect()
+
+        df.to_sql(con=engine, name ='season_player_stats', if_exists='append', index=False)
+
+        print('UPLOADED')
+    else:
+        print('Error')
+        return
+
+    con.close()
+    engine.dispose()
+
+    return
+
+
 def main():
+    # local db
+    db_choice = 'local'
+    # AWS RDS db
+    # db_choice = 'AWS'
+
     clips_id = get_clips_id()
     current_season_game_ids = get_current_season_game_ids(clips_id)
 
     season_to_date_team_df = get_season_to_date_box_scores(clips_id, current_season_game_ids)
 
     season_to_date_team_df = format_for_db(season_to_date_team_df)
+
+    upload_to_db(db_choice, season_to_date_team_df)
 
     return
 
