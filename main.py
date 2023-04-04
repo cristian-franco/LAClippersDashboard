@@ -1,8 +1,14 @@
-from nba_api.stats.endpoints import commonteamroster, playercareerstats, leaguegamefinder, teamdashboardbylastngames, \
-    boxscoretraditionalv2
+from nba_api.stats.endpoints import commonteamroster, leaguegamefinder
 from nba_api.stats.static import teams
-import streamlit as st
 import pandas as pd
+import time
+from requests.exceptions import Timeout
+from sqlalchemy import create_engine, text
+from urllib.parse import quote_plus
+import config
+import pymysql
+
+pymysql.install_as_MySQLdb()
 
 
 def get_clips_id():
@@ -21,156 +27,105 @@ def get_clips_players(clips_id):
     return clips_players_df
 
 
-def get_game_player_stats(clips_id, game_id):
-    game_sets = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id, timeout=600)
-    game_df = game_sets.get_data_frames()[0]
-    game_df = game_df.loc[game_df['TEAM_ID'] == clips_id]
-    game_df = game_df.drop(['TEAM_ID', 'TEAM_ABBREVIATION', 'TEAM_CITY', 'NICKNAME', 'COMMENT'], axis=1)
+def game_finder(team_id, int_timeout):
+    # default param for LeagueGameFinder is current season
+    try:
+        games_found = leaguegamefinder.LeagueGameFinder(team_id_nullable=team_id, timeout=int_timeout)
+    except Timeout:
+        print('Timeout caught, retying...')
+        time.sleep(5)
+        games_found = game_finder(team_id, int_timeout)
 
-    return game_df
-
-
-def season_to_date_overview(clips_players_df):
-    # accidentally pulled career stats instead of season to date stats, FIX
-    team_season_to_date_df = pd.DataFrame()
-    for player in range(len(clips_players_df.index)):
-        player_stats = playercareerstats.PlayerCareerStats(per_mode36="Totals", player_id=clips_players_df["PLAYER_ID"]
-        [player], timeout=600)
-        player_stats_df = player_stats.get_data_frames()[0]
-        if not player_stats_df.empty:
-            player_stats_df = player_stats_df.iloc[[-1]]
-            team_season_to_date_df = pd.concat([team_season_to_date_df, player_stats_df], ignore_index=True)
-
-    team_season_to_date_df = pd.merge(clips_players_df, team_season_to_date_df, how='right', on='PLAYER_ID')
-    team_season_to_date_df = team_season_to_date_df.drop(['LEAGUE_ID', 'TEAM_ID', 'WEIGHT', 'AGE', 'PLAYER_ID',
-                                                          'SEASON_ID', 'TEAM_ABBREVIATION', 'PLAYER_AGE', 'HEIGHT',
-                                                          'NUM'], axis=1)
-
-    return team_season_to_date_df
+    return games_found
 
 
-def season_to_date_team(clips_id, games):
-    all_games_ids = list(games['GAME_ID'])
+def get_latest_game_id(clips_id):
+    # contains summer league and preseason games
+    games = game_finder(clips_id, 10).get_data_frames()[0]
 
-    # get the dataframes of all the games then combine them into one
-    game_df = pd.DataFrame()
-    for game_id in all_games_ids:
-        game_df = pd.concat([game_df, get_game_player_stats(clips_id, game_id)], axis=0)
+    latest_game_id = games['GAME_ID'].iloc[0]
 
-    # game_df = game_df.drop(['PLAYER_ID'])
-    season_to_date_team_df = game_df.groupby(['PLAYER_NAME']).mean()
-
-    return season_to_date_team_df
+    return latest_game_id
 
 
-def last_games(clips_id):
-    gamefinder = leaguegamefinder.LeagueGameFinder(team_id_nullable=clips_id, timeout=600)
-    games = gamefinder.get_data_frames()[0]
+def pull_last_game_db(db_choice, api_latest_game_id):
+    if not compare_to_db_latest_game_id(db_choice, api_latest_game_id):
+        print('Latest game data not in database')
+        return
 
-    last_games_list = [last_three_games_team(clips_id, games), last_three_games_individual(clips_id, games),
-                       last_game_team(clips_id, games), last_game_individual(clips_id, games)]
+    if db_choice == 'local':
+        engine = create_engine(f"mysql://{config.mysql_local['user']}:%s@{config.mysql_local['host']}/"
+                               f"{config.mysql_local['db']}" % quote_plus(config.mysql_local['passwd']))
+        con = engine.connect()
 
-    return last_games_list
+        name = 'test_daily_boxscore'
 
+        sql = text('SELECT DISTINCT * FROM ' + name + ' WHERE GameID = ' + str(api_latest_game_id))
 
-def last_three_games_team(clips_id, games):
-    # get single game id's for the clippers for the season?
-    # filter down to the most recent three games
-    last_three_games_team_df = games.head(3)
+        sql_result_df = pd.read_sql(sql, con)
 
-    last_three_games_team_df = last_three_games_team_df.drop(['SEASON_ID', 'TEAM_ID', 'TEAM_ABBREVIATION', 'TEAM_NAME',
-                                                              'GAME_ID'], axis=1)
+    else:
+        print('Error')
+        return
 
-    return last_three_games_team_df
+    con.close()
+    engine.dispose()
 
-
-def last_three_games_individual(clips_id, games):
-    last_three_games_team_df = games.head(3)
-    last_three_game_ids = list(last_three_games_team_df['GAME_ID'])
-
-    # get the 3 dataframes of the last three games then combine them into one
-    game_df = pd.DataFrame()
-    for game_id in last_three_game_ids:
-        game_df = pd.concat([game_df, get_game_player_stats(clips_id, game_id)], axis=0)
-
-    # game_df = game_df.drop(['PLAYER_ID'])
-    game_df = game_df.groupby(['PLAYER_NAME']).mean()
-
-    return game_df
+    return sql_result_df
 
 
-def last_game_team(clips_id, games):
-    last_game_team_df = games.head(1)
+def compare_to_db_latest_game_id(db_choice, api_latest_game_id):
+    if db_choice == 'local':
+        engine = create_engine(f"mysql://{config.mysql_local['user']}:%s@{config.mysql_local['host']}/"
+                               f"{config.mysql_local['db']}" % quote_plus(config.mysql_local['passwd']))
+        con = engine.connect()
 
-    last_game_team_df = last_game_team_df.drop(['SEASON_ID', 'TEAM_ID', 'TEAM_ABBREVIATION', 'TEAM_NAME', 'GAME_ID'],
-                                               axis=1)
+        name = 'test_daily_boxscore'
 
-    return last_game_team_df
+        sql = text('SELECT DISTINCT GameID FROM ' + name + ' WHERE GameID = ' + str(api_latest_game_id))
 
+        sql_result_df = pd.read_sql(sql, con)
 
-def last_game_individual(clips_id, games):
-    last_game_team_df = games.head(1)
+        db_latest_game_id = sql_result_df['GameID'].iloc[0]
+    else:
+        print('Error')
+        return
 
-    last_game_id = last_game_team_df['GAME_ID'].iloc[0]
-    last_game_sets = boxscoretraditionalv2.BoxScoreTraditionalV2(last_game_id, timeout=600)
-    last_game_df = last_game_sets.get_data_frames()[0]
-    last_game_individual_df = last_game_df.loc[last_game_df['TEAM_ID'] == clips_id]
-    last_game_individual_df = last_game_individual_df.drop(['TEAM_ID', 'TEAM_ABBREVIATION', 'TEAM_CITY', 'GAME_ID',
-                                                            'PLAYER_ID', 'NICKNAME', 'COMMENT'],
-                                                           axis=1)
+    con.close()
+    engine.dispose()
 
-    return last_game_individual_df
-
-
-def refresh_data(clips_id, clips_players_df):
-    dataframe_list = []
-
-    last_games_list = last_games(clips_id)
-    last_game_team_df = last_games_list[0]
-    last_game_individual_df = last_games_list[1]
-    last_three_games_team_df = last_games_list[2]
-    last_three_games_individual_df = last_games_list[3]
-
-    dataframe_list.append(season_to_date_overview(clips_players_df))
-    dataframe_list.append(last_game_team_df)
-    dataframe_list.append(last_game_individual_df)
-    dataframe_list.append(last_three_games_team_df)
-    dataframe_list.append(last_three_games_individual_df)
-    dataframe_list.append(season_to_date_team(clips_players_df))
-
-    return dataframe_list
+    return int(api_latest_game_id) == db_latest_game_id
 
 
 def main():
+    # local db
+    db_choice = 'local'
+    # AWS RDS db
+    # db_choice = 'AWS'
+
     clips_id = get_clips_id()
+    latest_game_id = get_latest_game_id(clips_id)
+    # pull data from db, only what you need (?)
+    last_game_df = pull_last_game_db(db_choice, latest_game_id)
+
+    print(last_game_df)
+    # filter if needed
+
+
+
     clips_players_df = get_clips_players(clips_id)
 
-    # get all data
-    dataframe_list = refresh_data(clips_id, clips_players_df)
-    season_to_date_overview_df = dataframe_list[0]
-    season_to_date_team_df = dataframe_list[5]
-    last_game_team_df = dataframe_list[1]
-    last_game_individual_df = dataframe_list[2]
-    last_three_games_overview_df = dataframe_list[3]
-    last_three_games_individual_df = dataframe_list[4]
+    # Last Game Player Boxscores
 
-    # Last Game Overview - DONE
-    st.write('### Last Game - Overview', last_game_team_df)
-    # # Last Game Team Stats - DONE
-    st.write('### Last Game - Team', last_game_individual_df)
+    # Last Game Team Boxscores
 
+    # Last 3 Games Player Boxscore Averages
 
-    # Last 3 Games Overview - DONE
-    st.write("### Last 3 Games", last_three_games_overview_df)
-    # can add a row / section for averages across the three games
-    # Last 3 Games Team Stats - DONE
-    st.write("### Last 3 Games - Team", last_three_games_individual_df)
+    # Last 3 Games Team Boxscore Averages
 
+    # Season To Date Player Boxscore Averages
 
-    # Season To Date Overview
-    # st.write("### Season To Date - Overview", season_to_date_overview_df)
-    # Season To Date Team Stats - DONE
-    # st.write("### Season To Date - Team", season_to_date_team_df)
+    # Season To Date Team Boxscores Averages
 
 
 if __name__ == "__main__":
