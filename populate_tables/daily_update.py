@@ -2,7 +2,8 @@ from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv2
 from nba_api.stats.static import teams
 import pandas as pd
 import time
-from sqlalchemy import create_engine
+import re
+from sqlalchemy import create_engine, text
 from urllib.parse import quote_plus
 from requests.exceptions import Timeout
 import config
@@ -59,6 +60,30 @@ def get_game_df(clips_id, game_id):
     game_df = game_df.drop(['TEAM_ABBREVIATION', 'TEAM_CITY', 'NICKNAME', 'COMMENT'], axis=1)
 
     return game_df
+
+
+# CHECK
+def compare_to_db_latest_game_id(db_choice, api_latest_game_id):
+    if db_choice == 'local':
+        engine = create_engine(f"mysql://{config.mysql_local['user']}:%s@{config.mysql_local['host']}/"
+                               f"{config.mysql_local['db']}" % quote_plus(config.mysql_local['passwd']))
+        con = engine.connect()
+        
+        name = 'test_daily_boxscore'
+
+        sql = text('SELECT DISTINCT GameID FROM ' + name + ' WHERE GameID = ' + str(api_latest_game_id))
+
+        sql_result_df = pd.read_sql(sql, con)
+
+        db_latest_game_id = sql_result_df['GameID'].iloc[0]
+    else:
+        print('Error')
+        return
+
+    con.close()
+    engine.dispose()
+    
+    return int(api_latest_game_id) == db_latest_game_id
 
 
 # TRANSFORM
@@ -148,10 +173,14 @@ def main():
 
     clips_id = get_clips_id()
 
-    # get today's game ids
+    # get latest game id
     latest_game_id = get_latest_game_id(clips_id)
 
-    # get today's boxscore
+    if compare_to_db_latest_game_id(db_choice, latest_game_id):
+        print('Latest boxscore data already in Database')
+        return
+
+    # get latest boxscore
     boxscore_df = get_game_df(clips_id, latest_game_id)
 
     # format
