@@ -75,6 +75,9 @@ def compare_to_db_latest_game_id(db_choice, api_latest_game_id):
 
         sql_result_df = pd.read_sql(sql, con)
 
+        if sql_result_df.empty:
+            return False
+
         db_latest_game_id = sql_result_df['GameID'].iloc[0]
     else:
         print('Error')

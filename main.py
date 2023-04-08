@@ -2,6 +2,7 @@ from nba_api.stats.endpoints import commonteamroster, leaguegamefinder
 from nba_api.stats.static import teams
 import pandas as pd
 import time
+from dash import dash_table
 from requests.exceptions import Timeout
 from sqlalchemy import create_engine, text
 from urllib.parse import quote_plus
@@ -86,6 +87,9 @@ def compare_to_db_latest_game_id(db_choice, api_latest_game_id):
 
         sql_result_df = pd.read_sql(sql, con)
 
+        if sql_result_df.empty:
+            return False
+
         db_latest_game_id = sql_result_df['GameID'].iloc[0]
     else:
         print('Error')
@@ -109,11 +113,11 @@ def main():
     last_game_df = pull_last_game_db(db_choice, latest_game_id)
 
     print(last_game_df)
+
+    return last_game_df
     # filter if needed
 
-
-
-    clips_players_df = get_clips_players(clips_id)
+    # clips_players_df = get_clips_players(clips_id)
 
     # Last Game Player Boxscores
 
