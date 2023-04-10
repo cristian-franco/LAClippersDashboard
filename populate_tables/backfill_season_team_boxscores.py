@@ -2,8 +2,7 @@ from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv2
 from nba_api.stats.static import teams
 import pandas as pd
 import time
-import re
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from urllib.parse import quote_plus
 from requests.exceptions import Timeout
 import config
@@ -32,13 +31,17 @@ def game_finder(team_id, int_timeout):
     return games_found
 
 
-def get_latest_game_id(clips_id):
+def get_current_season_game_ids(clips_id):
     # contains summer league and preseason games
     games = game_finder(clips_id, 10).get_data_frames()[0]
+    current_season_id = games['SEASON_ID'].iloc[0]
 
-    latest_game_id = games['GAME_ID'].iloc[0]
+    current_season_games = games[games.SEASON_ID == current_season_id]
+    current_season_games = current_season_games.loc[current_season_games['GAME_DATE'] > '2022-10-01']
 
-    return latest_game_id
+    current_season_game_ids = list(current_season_games['GAME_ID'])
+
+    return current_season_game_ids
 
 
 def get_box_score(game_id, int_timeout):
@@ -62,31 +65,19 @@ def get_game_df(clips_id, game_id):
     return game_df
 
 
-# CHECK
-def compare_to_db_latest_game_id(db_choice, api_latest_game_id):
-    if db_choice == 'local':
-        engine = create_engine(f"mysql://{config.mysql_local['user']}:%s@{config.mysql_local['host']}/"
-                               f"{config.mysql_local['db']}" % quote_plus(config.mysql_local['passwd']))
-        con = engine.connect()
-        
-        name = 'test_daily_boxscore'
+def get_season_to_date_box_scores(clips_id, current_season_game_ids):
+    game_df = pd.DataFrame()
+    tracker = 0
+    for game_id in current_season_game_ids:
+        try:
+            game_df = pd.concat([game_df, get_game_df(clips_id, game_id)], axis=0)
+        except Timeout:
+            print('Timeout caught')
 
-        sql = text('SELECT DISTINCT GameID FROM ' + name + ' WHERE GameID = ' + str(api_latest_game_id))
+        tracker += 1
+        print(tracker)
 
-        sql_result_df = pd.read_sql(sql, con)
-
-        if sql_result_df.empty:
-            return False
-
-        db_latest_game_id = sql_result_df['GameID'].iloc[0]
-    else:
-        print('Error')
-        return
-
-    con.close()
-    engine.dispose()
-    
-    return int(api_latest_game_id) == db_latest_game_id
+    return game_df
 
 
 # TRANSFORM
@@ -151,11 +142,11 @@ def format_for_db(season_to_date_team_df):
 
 def upload_to_db(db_choice, df):
     if db_choice == 'local':
-        engine = create_engine(f"mysql://{config.mysql_local['user']}:%s@{config.mysql_local['host']}/"
-                               f"{config.mysql_local['db']}" % quote_plus(config.mysql_local['passwd']))
+        engine = create_engine(f"mysql://{config.mysql_local.user}:%s@{config.mysql_local.host}/{config.mysql_local.db}"
+                               % quote_plus(config.mysql_local.passwd))
         con = engine.connect()
 
-        df.to_sql(con=engine, name='test_daily_boxscore', if_exists='append', index=False)
+        df.to_sql(con=engine, name='season_player_stats', if_exists='append', index=False)
 
         print('UPLOADED')
     else:
@@ -175,22 +166,13 @@ def main():
     # db_choice = 'AWS'
 
     clips_id = get_clips_id()
+    current_season_game_ids = get_current_season_game_ids(clips_id)
 
-    # get latest game id
-    latest_game_id = get_latest_game_id(clips_id)
+    season_to_date_team_df = get_season_to_date_box_scores(clips_id, current_season_game_ids)
 
-    if compare_to_db_latest_game_id(db_choice, latest_game_id):
-        print('Latest boxscore data already in Database')
-        return
+    season_to_date_team_df = format_for_db(season_to_date_team_df)
 
-    # get latest boxscore
-    boxscore_df = get_game_df(clips_id, latest_game_id)
-
-    # format
-    boxscore_df = format_for_db(boxscore_df)
-
-    # upload
-    upload_to_db(db_choice, boxscore_df)
+    upload_to_db(db_choice, season_to_date_team_df)
 
     return
 

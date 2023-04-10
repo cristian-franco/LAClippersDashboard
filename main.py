@@ -101,6 +101,8 @@ def compare_to_db_latest_game_id(db_choice, api_latest_game_id):
     return int(api_latest_game_id) == db_latest_game_id
 
 
+# this script is out dated, will probably erase completely,just using it to keep track of what my outputs were
+# at the start of the project
 def main():
     # local db
     db_choice = 'local'
