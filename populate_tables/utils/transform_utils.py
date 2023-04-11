@@ -69,3 +69,15 @@ def format_for_db(season_to_date_team_df):
     season_to_date_team_df = format_columns(season_to_date_team_df)
 
     return season_to_date_team_df
+# everything above is for season_player_boxscores
+
+
+# below is for season_team_boxscores
+def format_team_boxscores(df):
+    df = df.drop(['TEAM_ID','SEASON_ID', 'TEAM_ABBREVIATION', 'TEAM_NAME'], axis=1)
+    df.rename(columns={'GAME_ID': 'GameID', 'GAME_DATE': 'GameDate', 'MATCHUP': 'Matchup', 'WL': 'WinLoss',
+                       'MIN': 'Minutes', 'PTS': 'Pts', 'FG_PCT': 'FGPct', 'FG3_PCT': 'FG3Pct', 'FT_PCT': 'FTPct',
+                       'OREB': 'OReb', 'DREB': 'DReb', 'REB': 'Reb', 'AST': 'Ast', 'STL': 'Stl', 'BLK': 'Blk',
+                       'PLUS_MINUS': 'PlusMinus'}, inplace=True)
+
+    return df

@@ -13,8 +13,8 @@ pymysql.install_as_MySQLdb()
 
 def upload_to_db(db_choice, df, table_name):
     if db_choice == 'local':
-        engine = create_engine(f"mysql://{config.mysql_local.user}:%s@{config.mysql_local.host}/{config.mysql_local.db}"
-                               % quote_plus(config.mysql_local.passwd))
+        engine = create_engine(f"mysql://{config.mysql_local['user']}:%s@{config.mysql_local['host']}/{config.mysql_local['db']}"
+                               % quote_plus(config.mysql_local['passwd']))
         con = engine.connect()
 
         df.to_sql(con=engine, name=table_name, if_exists='append', index=False)
