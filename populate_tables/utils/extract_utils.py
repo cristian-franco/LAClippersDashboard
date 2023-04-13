@@ -18,7 +18,7 @@ def get_clips_id():
     return clips_id
 
 
-def game_finder(team_id, int_timeout):
+def game_finder(team_id, int_timeout, ):
     # default param for LeagueGameFinder is current season
     try:
         games_found = leaguegamefinder.LeagueGameFinder(team_id_nullable=team_id, timeout=int_timeout)
@@ -41,4 +41,5 @@ def get_current_season_game_ids(clips_id):
     current_season_game_ids = list(current_season_games['GAME_ID'])
 
     return current_season_game_ids
+
 

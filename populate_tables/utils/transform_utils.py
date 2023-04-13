@@ -74,10 +74,30 @@ def format_for_db(season_to_date_team_df):
 
 # below is for season_team_boxscores
 def format_team_boxscores(df):
-    df = df.drop(['TEAM_ID','SEASON_ID', 'TEAM_ABBREVIATION', 'TEAM_NAME'], axis=1)
+    df = df.drop(['TEAM_ID', 'SEASON_ID', 'TEAM_ABBREVIATION', 'TEAM_NAME'], axis=1)
     df.rename(columns={'GAME_ID': 'GameID', 'GAME_DATE': 'GameDate', 'MATCHUP': 'Matchup', 'WL': 'WinLoss',
                        'MIN': 'Minutes', 'PTS': 'Pts', 'FG_PCT': 'FGPct', 'FG3_PCT': 'FG3Pct', 'FT_PCT': 'FTPct',
                        'OREB': 'OReb', 'DREB': 'DReb', 'REB': 'Reb', 'AST': 'Ast', 'STL': 'Stl', 'BLK': 'Blk',
                        'PLUS_MINUS': 'PlusMinus'}, inplace=True)
 
+    return df
+
+
+def format_player_totals(df):
+    df.drop(['GROUP_SET', 'NBA_FANTASY_PTS', 'DD2', 'TD3', 'WNBA_FANTASY_PTS', 'NBA_FANTASY_PTS_RANK', 'DD2_RANK',
+            'TD3_RANK', 'WNBA_FANTASY_PTS_RANK'], axis=1, inplace=True)
+
+    df.rename(columns={'PLAYER_ID': 'PlayerID', 'PLAYER_NAME': 'PlayerName', 'NICKNAME': 'Nickname', 'GP': 'GamesPlayed',
+                       'W': 'Wins', 'L': 'Losses', 'W_PCT': 'WinPct', 'MIN': 'Min', 'FG_PCT': 'FGPct',
+                       'FG3_PCT': 'FG3Pct', 'FT_PCT': 'FTPct', 'OREB': 'OReb', 'DREB': 'DReb',
+                       'REB': 'Reb', 'AST': 'Ast', 'STL': 'Stl', 'BLK': 'Blk', 'BLKA': 'BlkA', 'PTS': 'Pts',
+                       'PLUS_MINUS': 'PlusMinus', 'GP_RANK': 'GamesPlayedRank', 'W_RANK': 'WinsRank',
+                       'L_RANK': 'LossesRank', 'W_PCT_RANK': 'WinPctRank', 'MIN_RANK': 'MinRank', 'FGM_RANK': 'FGMRank',
+                       'FGA_RANK': 'FGARank', 'FG_PCT_RANK': 'FGPctRank', 'FG3M_RANK': 'FG3MRank',
+                       'FG3A_RANK': 'FG3ARank', 'FG3_PCT_RANK': 'FG3PctRank', 'FTM_RANK': 'FTMRank',
+                       'FTA_RANK': 'FTARank', 'FT_PCT_RANK': 'FTPctRank', 'OREB_RANK': 'ORebRank',
+                       'DREB_RANK': 'DRebRank', 'REB_RANK': 'RebRank', 'AST_RANK': 'AstRank',
+                       'TOV_RANK': 'TOVRank', 'STL_RANK': 'StlRank', 'BLK_RANK': 'BlkRank', 'BLKA_RANK': 'BlkaRank',
+                       'PF_RANK': 'PFRank', 'PFD_RANK': 'PFDRank', 'PTS_RANK': 'PtsRank',
+                       'PLUS_MINUS_RANK': 'PlusMinusRank'}, inplace=True)
     return df
