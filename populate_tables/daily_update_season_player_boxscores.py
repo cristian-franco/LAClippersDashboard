@@ -47,7 +47,7 @@ def compare_to_db_latest_game_id(db_choice, api_latest_game_id):
                                f"{config.mysql_local['db']}" % quote_plus(config.mysql_local['passwd']))
         con = engine.connect()
         
-        name = 'test_daily_boxscore'
+        name = 'test_season_player_boxscores'
 
         sql = text('SELECT DISTINCT GameID FROM ' + name + ' WHERE GameID = ' + str(api_latest_game_id))
 
@@ -89,7 +89,7 @@ def main():
     boxscore_df = tu.format_for_db(boxscore_df)
 
     # upload
-    lu.upload_to_db(db_choice, boxscore_df, 'test_daily_boxscore')
+    lu.upload_to_db(db_choice, boxscore_df, 'test_season_player_boxscores')
 
     return
 

@@ -30,16 +30,6 @@ def convert_minutes(minutes):
     return str_minutes + ':' + str_seconds
 
 
-def format_float(pct):
-    if pd.isna(pct):
-        return pct
-
-    pct = round(100 * pct, 1)
-    str_pct = str(pct) + '%'
-
-    return str_pct
-
-
 def format_minutes(mins):
     if pd.isna(mins):
         return mins
@@ -53,18 +43,11 @@ def format_minutes(mins):
     return mins
 
 
-def transform_pcts(season_to_date_team_df):
-    season_to_date_team_df['FG_PCT'] = season_to_date_team_df['FG_PCT'].apply(format_float)
-    season_to_date_team_df['FG3_PCT'] = season_to_date_team_df['FG3_PCT'].apply(format_float)
-    season_to_date_team_df['FT_PCT'] = season_to_date_team_df['FT_PCT'].apply(format_float)
-
-    return season_to_date_team_df
-
-
 def transform_minutes(df):
     df['MIN'] = df['MIN'].apply(format_minutes)
 
     return df
+
 
 def format_columns(season_to_date_team_df):
     season_to_date_team_df = season_to_date_team_df.drop('PLAYER_NAME', axis=1)
@@ -80,7 +63,7 @@ def format_columns(season_to_date_team_df):
 
 
 def format_for_db(season_to_date_team_df):
-    season_to_date_team_df['MIN'] = season_to_date_team_df['MIN'].apply(convert_minutes)
+    # season_to_date_team_df['MIN'] = season_to_date_team_df['MIN'].apply(convert_minutes)
 
     # season_to_date_team_df = transform_pcts(season_to_date_team_df)
     season_to_date_team_df = transform_minutes(season_to_date_team_df)
