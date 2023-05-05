@@ -33,7 +33,9 @@ def game_finder(team_id, int_timeout, ):
 def get_current_season_game_ids(clips_id):
     # contains summer league and preseason games
     games = game_finder(clips_id, 10).get_data_frames()[0]
-    current_season_id = games['SEASON_ID'].iloc[0]
+    # preseason is starts with 1, regular season starts with 2, postseason is either 4 or 5, then 4 digit year
+    current_season_id = str(games['SEASON_ID'].iloc[0])[1:]
+    current_season_id = '2' + current_season_id
 
     current_season_games = games[games.SEASON_ID == current_season_id]
     current_season_games = current_season_games.loc[current_season_games['GAME_DATE'] > '2022-10-01']
